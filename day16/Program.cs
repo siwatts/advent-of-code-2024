@@ -274,7 +274,7 @@ namespace AOC
             // Output
             Console.WriteLine("--");
             Console.WriteLine("Sum = {0}", sum);
-            if (sum == 7036 || sum == 11048)
+            if (sum == 7036 || sum == 11048 || sum == 134588)
             {
                 Console.WriteLine("Answer matches example expected answer");
             }
