@@ -12,13 +12,14 @@ namespace AOC
     }
     public class Maze
     {
-        private PriorityQueue<(int x, int y), int> frontier = new PriorityQueue<(int x, int y), int>();
-        private Dictionary<(int x, int y), (int x, int y)> cameFrom = new Dictionary<(int x, int y), (int x, int y)>();
-        private Dictionary<(int x, int y), (int cost, Direction d)> costSoFar = new Dictionary<(int x, int y), (int cost, Direction d)>();
+        private PriorityQueue<(int x, int y, Direction d), int> frontier = new PriorityQueue<(int x, int y, Direction d), int>();
+        private Dictionary<(int x, int y, Direction d), (int x, int y)> cameFrom = new Dictionary<(int x, int y, Direction d), (int x, int y)>();
+        private Dictionary<(int x, int y, Direction d), int> costSoFar = new Dictionary<(int x, int y, Direction d), int>();
         private (int x, int y) start;
         private (int x, int y) end;
         private int sizeX;
         private int sizeY;
+        private int finalCost = 0;
         //private bool[,] map; // More efficient alternative using 2D arrays?
         private List<List<char>> map;
         private bool debugmode;
@@ -30,11 +31,11 @@ namespace AOC
         {
             get
             {
-                if (costSoFar.Count == 0)
+                if (finalCost == 0)
                 {
                     Map();
                 }
-                return costSoFar[end].cost;
+                return finalCost;
             }
         }
         public Maze(List<string> input, (int x, int y) start, (int x, int y) end, bool debugmode)
@@ -60,7 +61,10 @@ namespace AOC
             {
                 for (int x = 0; x < sizeX; x++)
                 {
-                    if (markMappedLocations && cameFrom.ContainsKey((x, y)))
+                    if (markMappedLocations && ( cameFrom.ContainsKey((x, y, Direction.North))
+                                || cameFrom.ContainsKey((x, y, Direction.South))
+                                || cameFrom.ContainsKey((x, y, Direction.East))
+                                || cameFrom.ContainsKey((x, y, Direction.West)) ) )
                     {
                         Console.Write("/");
                     }
@@ -77,11 +81,11 @@ namespace AOC
             return map[y][x];
         }
         // Return list of viable neighbours + the cost required to get there (turncost + stepcost)
-        private List<(int x, int y, int cost, Direction d)> GetNeighbours((int x, int y) pos, Direction dir)
+        private List<(int x, int y, int cost, Direction d)> GetNeighbours((int x, int y, Direction dir) pos)
         {
             // Figure out min. turns req'd, can turn in either direction
             // Get clockwise first, counterclockwise is 4-clockwise mod 4
-            int clockwiseTurnsForNorth = ((int)Direction.North - (int)dir + 4) % 4;
+            int clockwiseTurnsForNorth = ((int)Direction.North - (int)pos.dir + 4) % 4;
             int clockwiseTurnsForEast = (clockwiseTurnsForNorth + 1) % 4;
             int clockwiseTurnsForSouth = (clockwiseTurnsForNorth + 2) % 4;
             int clockwiseTurnsForWest = (clockwiseTurnsForNorth + 3) % 4;
@@ -122,9 +126,10 @@ namespace AOC
         public void Map()
         {
             Console.WriteLine("Mapping maze...");
-            frontier.Enqueue(start, 0);
-            cameFrom.Add(start, start);
-            costSoFar.Add(start, (0, startingDirection));
+            var startD = (start.x, start.y, startingDirection);
+            frontier.Enqueue(startD, 0);
+            cameFrom.Add(startD, start);
+            costSoFar.Add(startD, 0);
 
             // Loop over all squares f in frontier, finding neighbours until
             // none are left, logging if we haven't visited them already
@@ -138,19 +143,22 @@ namespace AOC
             {
                 if (debugmode) { Console.WriteLine("Getting neighbours..."); }
                 var f = frontier.Dequeue();
-                if (f == end)
+                // Check to see if we found the end point
+                if (f.x == end.x && f.y == end.y)
                 {
                     // Found destination, quit early
                     Console.WriteLine("Reached destination at {0},{1}, ending search", f.x, f.y);
+                    // Copy out the final cost here because we won't know the direction later
+                    finalCost = costSoFar[f];
                     break;
                 }
-                var nbs = GetNeighbours(f, costSoFar[f].d);
+                var nbs = GetNeighbours(f);
                 if (debugmode) { Console.WriteLine("Got {0} neighbours for {1},{2}", nbs.Count, f.x, f.y); }
                 foreach (var n in nbs)
                 {
-                    (int x, int y) key = (n.x, n.y);
-                    (int cost, Direction d) newCostDir = (costSoFar[f].cost + n.cost, n.d);
-                    if (costSoFar.ContainsKey(key) && costSoFar[key].cost + 1000 < newCostDir.cost)
+                    (int x, int y, Direction d) key = (n.x, n.y, n.d);
+                    (int cost, Direction d) newCostDir = (costSoFar[f] + n.cost, n.d);
+                    if (costSoFar.ContainsKey(key) && costSoFar[key] < newCostDir.cost)
                     {
                         // Been here already, and cost is no better now
                         if (debugmode) { Console.WriteLine("Already mapped square {0},{1}", n.x, n.y); }
@@ -159,9 +167,9 @@ namespace AOC
                     {
                         // Update an existing record with a better or the same cost
                         if (debugmode) { Console.WriteLine("Found a better cost for square {0},{1}", n.x, n.y); }
-                        costSoFar[key] = newCostDir;
-                        cameFrom[key] = f;
-                        // TODO: Do we need to add it again to frontier queue? It has a new lower cost and might have ripple effects?
+                        costSoFar[key] = newCostDir.cost;
+                        cameFrom[key] = (f.x, f.y);
+                        // Need to add it again to frontier queue? It has a new lower cost and might have ripple effects?
                         frontier.Enqueue(key, newCostDir.cost);
                     }
                     else
@@ -170,8 +178,8 @@ namespace AOC
                         if (debugmode) { Console.WriteLine("Adding square {0},{1} to frontier", n.x, n.y); }
                         frontier.Enqueue(key, newCostDir.cost);
                         if (debugmode) { Console.WriteLine("Adding square {0},{1} to cameFrom, ref. {2},{3}", n.x, n.y, f.x, f.y); }
-                        costSoFar.Add(key, newCostDir);
-                        cameFrom.Add(key, f);
+                        costSoFar.Add(key, newCostDir.cost);
+                        cameFrom.Add(key, (f.x, f.y));
                     }
                 }
                 if (debugmode)
