@@ -12,9 +12,18 @@ namespace AOC
     }
     public class Maze
     {
+        // Points we have reached on the frontier for investigation and the dir. we were facing when we got there
+        // along with the cost score at that point as the priority
         private PriorityQueue<(int x, int y, Direction d), int> frontier = new PriorityQueue<(int x, int y, Direction d), int>();
-        private Dictionary<(int x, int y, Direction d), (int x, int y)> cameFrom = new Dictionary<(int x, int y, Direction d), (int x, int y)>();
+        // List the lowest cost seen so far of getting to a certain point on the frontier, and the direction we are
+        // facing with that score
         private Dictionary<(int x, int y, Direction d), int> costSoFar = new Dictionary<(int x, int y, Direction d), int>();
+        // For each point in costSoFar, list the square that we came from to get there
+        // There may be multiple ways to get there with the same score, even though direction is encoded in this position
+        // we take into account turns before or after movements so we can end up in the same square same direction having come
+        // from a different direction when making the step
+        private Dictionary<(int x, int y, Direction d), List<(int x, int y, Direction d)>> cameFrom = new Dictionary<(int x, int y, Direction d), List<(int x, int y, Direction d)>>();
+        // Maze start and end point we are searching for
         private (int x, int y) start;
         private (int x, int y) end;
         private int sizeX;
@@ -80,7 +89,7 @@ namespace AOC
         {
             return map[y][x];
         }
-        // Return list of viable neighbours + the cost required to get there (turncost + stepcost)
+        // Return list of viable neighbours + the relative cost delta required to get there from the current position (turncost + stepcost)
         private List<(int x, int y, int cost, Direction d)> GetNeighbours((int x, int y, Direction dir) pos)
         {
             // Figure out min. turns req'd, can turn in either direction
@@ -126,9 +135,12 @@ namespace AOC
         public void Map()
         {
             Console.WriteLine("Mapping maze...");
+
+            // Prime frontier with our starting position
+            // Also log it in cameFrom and costSoFar with a cost of 0
             var startD = (start.x, start.y, startingDirection);
             frontier.Enqueue(startD, 0);
-            cameFrom.Add(startD, start);
+            cameFrom.Add(startD, new List<(int x, int y, Direction d)>(){startD});
             costSoFar.Add(startD, 0);
 
             // Loop over all squares f in frontier, finding neighbours until
@@ -136,9 +148,6 @@ namespace AOC
             // This is not just a BFS, we need to take into account the cost of the neighbour
             // since some require turns, so take this into account when logging previously
             // seen squares as we may find a better route to one
-            // TODO: Can we still exit early, since it is a frontier square and not a neighbour the priority
-            // queue should ensure we already fully mapped the best way there by the time it is leaving
-            // the frontier queue
             while (frontier.Count != 0)
             {
                 if (debugmode) { Console.WriteLine("Getting neighbours..."); }
@@ -152,34 +161,52 @@ namespace AOC
                     finalCost = costSoFar[f];
                     break;
                 }
+                // Get all neighbours in all directions from here
                 var nbs = GetNeighbours(f);
                 if (debugmode) { Console.WriteLine("Got {0} neighbours for {1},{2}", nbs.Count, f.x, f.y); }
                 foreach (var n in nbs)
                 {
-                    (int x, int y, Direction d) key = (n.x, n.y, n.d);
-                    (int cost, Direction d) newCostDir = (costSoFar[f] + n.cost, n.d);
-                    if (costSoFar.ContainsKey(key) && costSoFar[key] < newCostDir.cost)
+                    // Construct position tuple (used as key and value various places) and total cost for this neighbour n
+                    (int x, int y, Direction d) nPos = (n.x, n.y, n.d);
+                    int nCost = costSoFar[f] + n.cost;
+
+                    if (costSoFar.ContainsKey(nPos))
                     {
-                        // Been here already, and cost is no better now
-                        if (debugmode) { Console.WriteLine("Already mapped square {0},{1}", n.x, n.y); }
-                    }
-                    else if (costSoFar.ContainsKey(key))
-                    {
-                        // Update an existing record with a better or the same cost
-                        if (debugmode) { Console.WriteLine("Found a better cost for square {0},{1}", n.x, n.y); }
-                        costSoFar[key] = newCostDir.cost;
-                        cameFrom[key] = (f.x, f.y);
-                        // Need to add it again to frontier queue? It has a new lower cost and might have ripple effects?
-                        frontier.Enqueue(key, newCostDir.cost);
+                        // Been here already, evaluate
+                        if (costSoFar[nPos] < nCost)
+                        {
+                            // Already been here and new cost is worse, ignore it
+                            if (debugmode) { Console.WriteLine("Already mapped square {0},{1}", n.x, n.y); }
+                        }
+                        else if (costSoFar[nPos] == nCost)
+                        {
+                            // The same cost to get here, found an alternate route
+                            if (debugmode) { Console.WriteLine("Found another route to square {0},{1} with the same cost", n.x, n.y); }
+                            // Add to list, don't replace
+                            cameFrom[nPos].Add(f);
+                            // Already added this neighbour point with this direction so we don't need to queue to frontier again
+                        }
+                        else
+                        {
+                            // Better cost score found, replace
+                            if (debugmode) { Console.WriteLine("Found a better cost for square {0},{1}", n.x, n.y); }
+                            costSoFar[nPos] = nCost;
+                            // Replace with a new list of 1
+                            cameFrom[nPos] = new List<(int x, int y, Direction d)>(){f};
+                            // Add to frontier with new lower cost score for evaluation
+                            if (debugmode) { Console.WriteLine("Adding square {0},{1} to frontier again", n.x, n.y); }
+                            frontier.Enqueue(nPos, nCost);
+                        }
                     }
                     else
                     {
                         // Not visited here before
                         if (debugmode) { Console.WriteLine("Adding square {0},{1} to frontier", n.x, n.y); }
-                        frontier.Enqueue(key, newCostDir.cost);
+                        frontier.Enqueue(nPos, nCost);
                         if (debugmode) { Console.WriteLine("Adding square {0},{1} to cameFrom, ref. {2},{3}", n.x, n.y, f.x, f.y); }
-                        costSoFar.Add(key, newCostDir.cost);
-                        cameFrom.Add(key, (f.x, f.y));
+                        costSoFar.Add(nPos, nCost);
+                        // Start new list for new cameFrom entry with 1 element
+                        cameFrom.Add(nPos, new List<(int x, int y, Direction d)>(){f});
                     }
                 }
                 if (debugmode)
