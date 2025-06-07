@@ -237,6 +237,17 @@ class Computer
             outstring += to_string(output.back());
             return outstring;
         }
+        void Reset(long regA, long regB, long regC)
+        {
+            // Reset registers, newly provided values
+            this->regA = regA;
+            this->regB = regB;
+            this->regC = regC;
+            // Reset to first instruction
+            instrPtr = 0;
+            // Empty the output
+            output.clear();
+        }
 };
 
 int main(int argc, char* argv[])
@@ -344,12 +355,12 @@ int main(int argc, char* argv[])
     do
     {
         regA2++;
-        if (regA2 % 500000 == 0)
+        if (regA2 % 1000000 == 0)
         {
             cout << "Running A2 override: " << regA2 << endl;
         }
-        Computer comp2(regA, regB, regC, program, debugapply);
-        outP2 = comp2.Run(regA2);
+        comp.Reset(regA2, regB, regC);
+        outP2 = comp.Run();
     }
     while (outP2 != program);
 
