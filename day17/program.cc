@@ -65,7 +65,7 @@ class Computer
                 pos += 4;
                 ptr += 2; // halved because we care about digits not commas
             }
-            cout << "Parsed " << prog.size() << " program instructions\n";
+            if (debugapply) { cout << "Parsed " << prog.size() << " program instructions\n"; }
         }
         int ComboOperand(int operand)
         {
@@ -214,6 +214,11 @@ class Computer
         }
 
     public:
+        string Run(long overrideRegA)
+        {
+            regA = overrideRegA;
+            return Run();
+        }
         string Run()
         {
             bool returnCode;
@@ -330,6 +335,26 @@ int main(int argc, char* argv[])
     // Output
     cout << "--\n";
     cout << "Program output = " << out << endl;
+
+    // Part 2
+    // What is the lowest Register A input required to have the program output a copy of itself
+    long regA2 = -1;
+    string outP2;
+    cout << "--\n- Part 2 -\n";
+    do
+    {
+        regA2++;
+        if (regA2 % 500000 == 0)
+        {
+            cout << "Running A2 override: " << regA2 << endl;
+        }
+        Computer comp2(regA, regB, regC, program, debugapply);
+        outP2 = comp2.Run(regA2);
+    }
+    while (outP2 != program);
+
+    cout << "--\n";
+    cout << "P2 output, regA = " << regA2 << endl;
 
     cout << "--\nEnd.\n";
     return 0;
