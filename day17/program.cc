@@ -362,7 +362,7 @@ int main(int argc, char* argv[])
         comp.Reset(regA2, regB, regC);
         outP2 = comp.Run();
     }
-    while (outP2 != program);
+    while (outP2 != program && regA2 <= 1000000000);
 
     cout << "--\n";
     cout << "P2 output, regA = " << regA2 << endl;
